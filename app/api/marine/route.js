@@ -5,10 +5,15 @@ export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
 
-    const latitude = Number(searchParams.get("latitude"));
-    const longitude = Number(searchParams.get("longitude"));
+    const latitudeParam = searchParams.get("latitude");
+    const longitudeParam = searchParams.get("longitude");
+
+const latitude = Number(latitudeParam);
+const longitude = Number(longitudeParam);
 
     if (
+       latitudeParam === null ||
+       longitudeParam === null ||
       !Number.isFinite(latitude) ||
       !Number.isFinite(longitude) ||
       latitude < -90 ||
