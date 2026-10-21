@@ -1,69 +1,151 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+﻿"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import ForecastCards from "./components/ForecastCards";
+import WaveHeightChart from "./components/WaveHeightChart";
+
+type ForecastPoint = {
+  time: string;
+  wave_height: number | null;
+  wave_direction: number | null;
+  sea_surface_temperature: number | null;
+};
+
+const LOCATIONS = [
+  { name: "Chennai", latitude: 13.08, longitude: 80.3 },
+  { name: "Visakhapatnam", latitude: 17.69, longitude: 83.22 },
+  { name: "Kochi", latitude: 9.93, longitude: 76.27 },
+];
 
 export default function Home() {
+  const [locationIndex, setLocationIndex] = useState(0);
+  const [forecast, setForecast] = useState<ForecastPoint[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const location = LOCATIONS[locationIndex];
+
+  const loadForecast = useCallback(async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch(
+        `/api/marine?latitude=${location.latitude}&longitude=${location.longitude}`,
+        { cache: "no-store" }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to load marine forecast.");
+      }
+
+      if (!Array.isArray(data?.hourly?.time)) {
+        throw new Error("Hourly forecast data is unavailable.");
+      }
+
+      const hourly = data.hourly;
+
+      const records: ForecastPoint[] = hourly.time.map(
+        (time: string, index: number) => ({
+          time,
+          wave_height: hourly.wave_height?.[index] ?? null,
+          wave_direction: hourly.wave_direction?.[index] ?? null,
+          sea_surface_temperature:
+            hourly.sea_surface_temperature?.[index] ?? null,
+        })
+      );
+
+      setForecast(records);
+    } catch (err) {
+      setForecast([]);
+      setError(
+        err instanceof Error ? err.message : "Unable to load forecast."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [location.latitude, location.longitude]);
+
+  useEffect(() => {
+    void loadForecast();
+  }, [loadForecast]);
+
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>
-            To get started, edit the{" "}
-            <code className={styles.code}>page.tsx</code> file.
+    <main
+      style={{
+        minHeight: "100vh",
+        background: "#f0f7fa",
+        color: "#123047",
+        padding: "32px 20px",
+        fontFamily: "Arial, Helvetica, sans-serif",
+      }}
+    >
+      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+        <header style={{ marginBottom: 30 }}>
+          <p style={{ color: "#0786a8", fontWeight: 700 }}>OCEANPULSE</p>
+          <h1 style={{ fontSize: "clamp(28px, 5vw, 42px)" }}>
+            Ocean Conditions Explorer
           </h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p style={{ marginTop: 8 }}>
+            Explore hourly marine forecasts for coastal locations.
           </p>
-        </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+
+          <label htmlFor="location" style={{ display: "block", marginTop: 20 }}>
+            Select coastal location
+          </label>
+          <select
+            id="location"
+            value={locationIndex}
+            onChange={(event) => setLocationIndex(Number(event.target.value))}
+            style={{ padding: 10, marginTop: 8, borderRadius: 8 }}
           >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+            {LOCATIONS.map((item, index) => (
+              <option key={item.name} value={index}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+        </header>
+
+        <section
+          style={{
+            background: "#dff3f8",
+            padding: 20,
+            borderRadius: 14,
+            marginBottom: 24,
+          }}
+        >
+          <h2>{location.name}</h2>
+          <p>
+            Latitude: {location.latitude} | Longitude: {location.longitude}
+          </p>
+        </section>
+
+        {loading && <p role="status">Loading marine forecast...</p>}
+
+        {!loading && error && (
+          <section role="alert" style={{ padding: 20, background: "#fff1f0" }}>
+            <h2>Unable to load forecast</h2>
+            <p>{error}</p>
+            <button onClick={() => void loadForecast()}>Try again</button>
+          </section>
+        )}
+
+        {!loading && !error && forecast.length > 0 && (
+          <>
+            <h2>Marine Conditions</h2>
+            <ForecastCards forecast={forecast} />
+            <WaveHeightChart forecast={forecast} />
+          </>
+        )}
+
+        <footer style={{ marginTop: 30, fontSize: 13, color: "#526777" }}>
+          Forecasts are estimates and do not replace official marine safety
+          warnings.
+        </footer>
+      </div>
+    </main>
   );
 }
